@@ -1268,35 +1268,31 @@ $(document).ready(function() {
         const mail = $('#loginMail').val();
         const password = $('#loginPassword').val();
         const jobPlace = $('#loginJobPlace').val();
-        const allUsers = [];
         
         $.ajax({
             url: 'http://localhost:8080/api/login',
             data:{
+                password: password,
                 mail: mail,
                 jobPlace: jobPlace
             },
             success: function(data) {
-                allUsers.push(...data.result);
-
-                const findUser = allUsers.find(user => user.mail === mail);
+                console.log(data.user);
+                const findUser = data.user;
                 
                 if (findUser) {
-                    if (findUser.password === password) {
-                        if (findUser.job_place === jobPlace) {
-                            $('.error').html('<p>Logging in</p>');
+                    if (findUser.job_place === jobPlace) {
+                        $('.error').html('<p>Logging in</p>');
 
-                            localStorage.setItem('token', data.token);
-                            window.location.href= '/front/main.html';
-                        } else {
-                            $('.error').html("<p>The job place Doesn't match details</p>");
-                        }
+                        localStorage.setItem('token', data.token);
+                        window.location.href= '/front/main.html';
                     } else {
-                        $('.error').html('<p>Password is incorrect</p>');
+                        $('.error').html("<p>Job place Doesn't match details</p>");
                     }
-                } else {
-                    $('.error').html('<p>No matching email found</p>');
                 }
+            },
+            error: function(xhr, status, error) {
+                $('.error').html(`<p>Email or password worng</p>`);
             }
         });
     });
@@ -1453,9 +1449,5 @@ $(document).ready(function() {
             background: '#d9d9d9',
             confirmButtonText: 'Confirm'
         });
-
-
     });
 });
-
-
