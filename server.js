@@ -3,6 +3,7 @@ const mysql = require('mysql');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
 
 const app = express();
 
@@ -28,36 +29,65 @@ conn.connect((err) => {
     console.log('Connected to SQL');
 });
 
-app.post('/api/register', (req,res) => {
-    const {id, name, lastName, phone, mail, password, jobPlace} = req.body;
+app.post('/api/register', (req, res) => {
+    const { id, name, lastName, phone, mail, password, jobPlace } = req.body;
+    const date = new Date();
 
-    conn.query(`INSERT INTO adminUser (id, name, last_name, phone, mail, password, job_place, is_admin) VALUES ('${id}', '${name}', '${lastName}', '${phone}', '${mail}', '${password}', '${jobPlace}', '1')`, (err, result) => {
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+
+    const currentDate = `${year}/${month}/${day}`
+
+    bcrypt.hash(password, 10, (err, hashedPassword) => {
         if (err) {
-            console.error('Error: ' + err);
+            console.error('Error hashing password:', err);
+            res.status(500).send('Error hashing password');
             return;
         }
 
-        const token = jwt.sign({ mail: mail, jobPlace: jobPlace }, secretKey);
-        res.send({ token, result});
+        conn.query(`INSERT INTO adminUser (id, name, last_name, phone, mail, password, job_place, date, is_admin) VALUES ('${id}', '${name}', '${lastName}', '${phone}', '${mail}', '${hashedPassword}', '${jobPlace}', '${currentDate}', '1')`, (err, result) => {
+            if (err) {
+                console.error('Error inserting user:', err);
+                res.status(500).send('Error inserting user');
+                return;
+            }
+
+            const token = jwt.sign({ mail: mail, jobPlace: jobPlace }, secretKey);
+            res.send({ token, result });
+        });
     });
 });
 
 app.get('/api/login', (req, res) => {
-    const {mail, jobPlace} = req.query;
+    const { mail, jobPlace, password } = req.query;
 
-    console.log(mail, jobPlace);
-
-    conn.query(`SELECT * FROM adminUser UNION SELECT * FROM employees`, (err, result) => {
+    conn.query(`SELECT * FROM adminUser WHERE mail = '${mail}' UNION SELECT * FROM employees WHERE mail = '${mail}'`, (err, result) => {
         if (err) {
             console.error('LoginError: ' + err);
             return;
         }
-    
-        const token = jwt.sign({ mail: mail, jobPlace: jobPlace }, secretKey);
-        
-        res.send({ result, token });
-    })
+
+        if (result.length > 0) {
+            const user = result[0];
+
+            bcrypt.compare(password, user.password, (compareErr, compareResult) => {
+                if (compareErr) {
+                    console.error('Error comparing passwords:', compareErr);
+                    return;
+                }
+
+                if (compareResult) {
+                    const token = jwt.sign({ mail: mail, jobPlace: jobPlace }, secretKey);
+                    res.send({ user, token });
+                }
+            });
+        } else {
+            res.status(404).send('No matching email found');
+        }
+    });
 });
+
 
 app.get('/api/mainTable', (req, res) => {
     const week = 'Week'+req.query.id;
@@ -298,10 +328,4 @@ app.post('/api/editProfile', (req,res) => {
     }
 });
 
-
 app.listen(8080, console.log('Listening to 8080'));
-
-
-// const decodedToken = jwt.decode(token, { complete: true });
-
-// console.log('Decoded Token:', decodedToken);
